@@ -1,0 +1,1480 @@
+
+===== src/components/layout/Header.jsx =====
+
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth.js';
+import { useCart } from '../../hooks/useCart.js';
+import { USER_ROLES } from '../../utils/constants.js';
+import logo from '../../assets/images/logo.png';
+
+const Header = () => {
+  const { user, logout, isAuthenticated } = useAuth();
+  const { getItemCount } = useCart();
+  const navigate = useNavigate();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const getDashboardLink = () => {
+    if (!user) return '/';
+    switch (user.role) {
+      case USER_ROLES.RESTAURANT:
+        return '/restaurant/dashboard';
+      case USER_ROLES.DRIVER:
+        return '/driver/dashboard';
+      case USER_ROLES.ADMIN:
+        return '/admin/dashboard';
+      default:
+        return '/';
+    }
+  };
+
+  const getRoleBasedLinks = () => {
+    if (!user) return [];
+    
+    const commonLinks = [
+      { to: '/profile', label: 'Profile' },
+    ];
+
+    switch (user.role) {
+      case USER_ROLES.CUSTOMER:
+        return [
+          { to: '/orders', label: 'My Orders' },
+          ...commonLinks
+        ];
+      case USER_ROLES.RESTAURANT:
+        return [
+          { to: '/restaurant/menu', label: 'Menu' },
+          { to: '/restaurant/orders', label: 'Orders' },
+          ...commonLinks
+        ];
+      case USER_ROLES.DRIVER:
+        return [
+          { to: '/driver/deliveries', label: 'Deliveries' },
+          ...commonLinks
+        ];
+      case USER_ROLES.ADMIN:
+        return [
+          { to: '/admin/users', label: 'Users' },
+          ...commonLinks
+        ];
+      default:
+        return commonLinks;
+    }
+  };
+
+  return (
+    <nav className="bg-white shadow-lg">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex">
+            <div className="flex-shrink-0 flex items-center">
+              <Link to="/" className="flex items-center">
+                <img className="h-8 w-auto" src={logo} alt="Logo" />
+                <span className="ml-2 text-xl font-bold text-gray-900">
+                  {import.meta.env.VITE_APP_NAME}
+                </span>
+              </Link>
+            </div>
+            
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              <Link
+                to="/"
+                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              >
+                Home
+              </Link>
+              <Link
+                to="/restaurants"
+                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              >
+                Restaurants
+              </Link>
+            </div>
+          </div>
+
+          <div className="hidden sm:ml-6 sm:flex sm:items-center sm:space-x-4">
+            {isAuthenticated ? (
+              <>
+                {user?.role === USER_ROLES.CUSTOMER && (
+                  <Link
+                    to="/cart"
+                    className="relative p-2 text-gray-400 hover:text-gray-500"
+                  >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    {getItemCount() > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs">
+                        {getItemCount()}
+                      </span>
+                    )}
+                  </Link>
+                )}
+
+                <div className="relative">
+                  <button
+                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                    className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <span className="sr-only">Open user menu</span>
+                    <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
+                      <span className="text-gray-600 font-medium">
+                        {user?.name?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="ml-2 text-gray-700">{user?.name}</span>
+                    <svg className="ml-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+
+                  {isProfileMenuOpen && (
+                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5">
+                      {getRoleBasedLinks().map((link) => (
+                        <Link
+                          key={link.to}
+                          to={link.to}
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          onClick={() => setIsProfileMenuOpen(false)}
+                        >
+                          {link.label}
+                        </Link>
+                      ))}
+                      <button
+                        onClick={handleLogout}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex space-x-4">
+                <Link
+                  to="/login"
+                  className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  className="bg-blue-600 text-white hover:bg-blue-700 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Register
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center sm:hidden">
+            {isAuthenticated && user?.role === USER_ROLES.CUSTOMER && (
+              <Link
+                to="/cart"
+                className="relative p-2 text-gray-400 hover:text-gray-500 mr-2"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                {getItemCount() > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs">
+                    {getItemCount()}
+                  </span>
+                )}
+              </Link>
+            )}
+
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+            >
+              <span className="sr-only">Open main menu</span>
+              <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {isMenuOpen && (
+        <div className="sm:hidden">
+          <div className="pt-2 pb-3 space-y-1">
+            <Link
+              to="/"
+              className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Home
+            </Link>
+            <Link
+              to="/restaurants"
+              className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Restaurants
+            </Link>
+
+            {isAuthenticated ? (
+              <>
+                {getRoleBasedLinks().map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    setIsMenuOpen(false);
+                  }}
+                  className="w-full text-left border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Register
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+};
+
+export default Header;
+===== src/components/layout/Footer.jsx =====
+
+import React from 'react';
+import { Link } from 'react-router-dom';
+
+const Footer = () => {
+  return (
+    <footer className="bg-gray-800 text-white">
+      <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div>
+            <h3 className="text-lg font-semibold mb-4">FoodDelivery</h3>
+            <p className="text-gray-300">
+              Delivering delicious food to your doorstep since 2024.
+            </p>
+          </div>
+          
+          <div>
+            <h4 className="text-lg font-semibold mb-4">Quick Links</h4>
+            <ul className="space-y-2">
+              <li><Link to="/" className="text-gray-300 hover:text-white">Home</Link></li>
+              <li><Link to="/restaurants" className="text-gray-300 hover:text-white">Restaurants</Link></li>
+              <li><Link to="/about" className="text-gray-300 hover:text-white">About Us</Link></li>
+              <li><Link to="/contact" className="text-gray-300 hover:text-white">Contact</Link></li>
+            </ul>
+          </div>
+          
+          <div>
+            <h4 className="text-lg font-semibold mb-4">Services</h4>
+            <ul className="space-y-2">
+              <li><Link to="/food-delivery" className="text-gray-300 hover:text-white">Food Delivery</Link></li>
+              <li><Link to="/restaurant-partners" className="text-gray-300 hover:text-white">Restaurant Partners</Link></li>
+              <li><Link to="/driver-app" className="text-gray-300 hover:text-white">Driver App</Link></li>
+              <li><Link to="/business-solutions" className="text-gray-300 hover:text-white">Business Solutions</Link></li>
+            </ul>
+          </div>
+          
+          <div>
+            <h4 className="text-lg font-semibold mb-4">Contact Us</h4>
+            <ul className="space-y-2">
+              <li className="text-gray-300">support@fooddelivery.com</li>
+              <li className="text-gray-300">+1 (555) 123-4567</li>
+              <li className="text-gray-300">123 Food Street, City, Country</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div className="mt-8 pt-8 border-t border-gray-700">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <p className="text-gray-300">
+              &copy; {new Date().getFullYear()} FoodDelivery. All rights reserved.
+            </p>
+            <div className="flex space-x-6 mt-4 md:mt-0">
+              <Link to="/privacy" className="text-gray-300 hover:text-white">
+                Privacy Policy
+              </Link>
+              <Link to="/terms" className="text-gray-300 hover:text-white">
+                Terms of Service
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+};
+
+export default Footer;
+===== src/components/layout/Sidebar.jsx =====
+
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth.js';
+import { USER_ROLES } from '../../utils/constants.js';
+
+const Sidebar = () => {
+  const { user } = useAuth();
+
+  const getMenuItems = () => {
+    if (!user) return [];
+
+    switch (user.role) {
+      case USER_ROLES.RESTAURANT:
+        return [
+          { to: '/restaurant/dashboard', label: 'Dashboard', icon: 'dashboard' },
+          { to: '/restaurant/menu', label: 'Menu Management', icon: 'restaurant' },
+          { to: '/restaurant/orders', label: 'Orders', icon: 'receipt' },
+          { to: '/restaurant/settings', label: 'Settings', icon: 'settings' },
+        ];
+      case USER_ROLES.DRIVER:
+        return [
+          { to: '/driver/dashboard', label: 'Dashboard', icon: 'dashboard' },
+          { to: '/driver/deliveries', label: 'Delivery Requests', icon: 'delivery' },
+          { to: '/driver/history', label: 'History', icon: 'history' },
+        ];
+      case USER_ROLES.ADMIN:
+        return [
+          { to: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
+          { to: '/admin/users', label: 'Users', icon: 'people' },
+          { to: '/admin/restaurants', label: 'Restaurants', icon: 'restaurant' },
+          { to: '/admin/orders', label: 'Orders', icon: 'receipt' },
+          { to: '/admin/reports', label: 'Reports', icon: 'analytics' },
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const getIcon = (iconName) => {
+    const icons = {
+      dashboard: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+      ),
+      restaurant: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      ),
+      receipt: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      ),
+      settings: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+      delivery: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+        </svg>
+      ),
+      history: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      people: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.67 3.623a10.953 10.953 0 01-.707.785 9.958 9.958 0 01-12.682 0 10.953 10.953 0 01-.707-.785" />
+        </svg>
+      ),
+      analytics: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+    };
+
+    return icons[iconName] || null;
+  };
+
+  const menuItems = getMenuItems();
+
+  if (menuItems.length === 0) return null;
+
+  return (
+    <div className="bg-gray-800 text-white w-64 min-h-screen">
+      <div className="p-6">
+        <h2 className="text-xl font-semibold">Dashboard</h2>
+      </div>
+      
+      <nav className="mt-6">
+        {menuItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) =>
+              `flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700 hover:text-white ${
+                isActive ? 'bg-gray-900 text-white' : ''
+              }`
+            }
+          >
+            <span className="mr-3">{getIcon(item.icon)}</span>
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  );
+};
+
+export default Sidebar;
+===== src/components/layout/Layout.jsx =====
+
+import React from 'react';
+import { Outlet } from 'react-router-dom';
+import Header from './Header.jsx';
+import Footer from './Footer.jsx';
+import { useAuth } from '../../hooks/useAuth.js';
+import { USER_ROLES } from '../../utils/constants.js';
+
+const Layout = ({ children }) => {
+  const { user } = useAuth();
+
+  const isDashboardLayout = user && [
+    USER_ROLES.RESTAURANT,
+    USER_ROLES.DRIVER,
+    USER_ROLES.ADMIN
+  ].includes(user.role);
+
+  if (isDashboardLayout) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <Header />
+        <div className="flex">
+          <aside className="hidden md:block">
+            <div className="sticky top-0">
+              {/* Sidebar will be conditionally rendered in dashboard pages */}
+            </div>
+          </aside>
+          <main className="flex-1">
+            <div className="py-6">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <Outlet />
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Header />
+      <main className="flex-1">
+        <Outlet />
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+export default Layout;
+===== src/components/ui/Button.jsx =====
+
+import React from 'react';
+
+const Button = ({
+  children,
+  type = 'button',
+  variant = 'primary',
+  size = 'md',
+  fullWidth = false,
+  disabled = false,
+  loading = false,
+  onClick,
+  className = '',
+  ...props
+}) => {
+  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+  
+  const variants = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500',
+    success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-blue-500',
+    ghost: 'text-gray-700 hover:bg-gray-100 focus:ring-gray-500'
+  };
+
+  const sizes = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2 text-base',
+    lg: 'px-6 py-3 text-lg'
+  };
+
+  const widthClass = fullWidth ? 'w-full' : '';
+  const disabledClass = disabled || loading ? 'opacity-50 cursor-not-allowed' : '';
+
+  return (
+    <button
+      type={type}
+      className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${widthClass} ${disabledClass} ${className}`}
+      disabled={disabled || loading}
+      onClick={onClick}
+      {...props}
+    >
+      {loading && (
+        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-current" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+      )}
+      {children}
+    </button>
+  );
+};
+
+export default Button;
+===== src/components/ui/Card.jsx =====
+
+import React from 'react';
+
+const Card = ({ children, className = '', ...props }) => {
+  return (
+    <div
+      className={`bg-white rounded-lg shadow-md ${className}`}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+};
+
+const CardHeader = ({ children, className = '' }) => {
+  return (
+    <div className={`px-6 py-4 border-b border-gray-200 ${className}`}>
+      {children}
+    </div>
+  );
+};
+
+const CardBody = ({ children, className = '' }) => {
+  return (
+    <div className={`px-6 py-4 ${className}`}>
+      {children}
+    </div>
+  );
+};
+
+const CardFooter = ({ children, className = '' }) => {
+  return (
+    <div className={`px-6 py-4 border-t border-gray-200 ${className}`}>
+      {children}
+    </div>
+  );
+};
+
+Card.Header = CardHeader;
+Card.Body = CardBody;
+Card.Footer = CardFooter;
+
+export default Card;
+===== src/components/ui/Modal.jsx =====
+
+import React, { useEffect } from 'react';
+
+const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const sizes = {
+    sm: 'max-w-md',
+    md: 'max-w-lg',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl'
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div
+          className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
+          onClick={onClose}
+        />
+
+        <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+        <div
+          className={`inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizes[size]} sm:w-full`}
+        >
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900">
+                {title}
+              </h3>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="px-6 py-4">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Modal;
+===== src/components/ui/Loader.jsx =====
+
+import React from 'react';
+
+const Loader = ({ size = 'md', text = 'Loading...' }) => {
+  const sizes = {
+    sm: 'w-4 h-4',
+    md: 'w-8 h-8',
+    lg: 'w-12 h-12'
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center space-y-4">
+      <div className="relative">
+        <div className={`${sizes[size]} animate-spin rounded-full border-4 border-gray-200`} />
+        <div className={`${sizes[size]} absolute top-0 left-0 animate-spin rounded-full border-4 border-blue-500 border-t-transparent`} />
+      </div>
+      {text && <p className="text-gray-600">{text}</p>}
+    </div>
+  );
+};
+
+export const PageLoader = () => {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <Loader size="lg" text="Loading application..." />
+    </div>
+  );
+};
+
+export const InlineLoader = () => {
+  return (
+    <div className="inline-flex items-center">
+      <Loader size="sm" text="" />
+    </div>
+  );
+};
+
+export default Loader;
+===== src/components/ui/Alert.jsx =====
+
+import React, { useState } from 'react';
+
+const Alert = ({ type = 'info', title, children, onClose, className = '' }) => {
+  const [isVisible, setIsVisible] = useState(true);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    if (onClose) onClose();
+  };
+
+  if (!isVisible) return null;
+
+  const alertStyles = {
+    info: 'bg-blue-50 border-blue-200 text-blue-800',
+    success: 'bg-green-50 border-green-200 text-green-800',
+    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+    error: 'bg-red-50 border-red-200 text-red-800'
+  };
+
+  const iconStyles = {
+    info: 'text-blue-400',
+    success: 'text-green-400',
+    warning: 'text-yellow-400',
+    error: 'text-red-400'
+  };
+
+  const icons = {
+    info: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+      </svg>
+    ),
+    success: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+      </svg>
+    ),
+    warning: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+      </svg>
+    ),
+    error: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+      </svg>
+    )
+  };
+
+  return (
+    <div className={`rounded-md border p-4 ${alertStyles[type]} ${className}`}>
+      <div className="flex">
+        <div className={`flex-shrink-0 ${iconStyles[type]}`}>
+          {icons[type]}
+        </div>
+        <div className="ml-3 flex-1">
+          {title && <h3 className="font-medium">{title}</h3>}
+          <div className={`${title ? 'mt-2' : ''}`}>{children}</div>
+        </div>
+        {onClose && (
+          <button
+            onClick={handleClose}
+            className="ml-4 flex-shrink-0 text-gray-400 hover:text-gray-500"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Alert;
+===== src/components/ui/Input.jsx =====
+
+import React from 'react';
+
+const Input = React.forwardRef(({
+  label,
+  type = 'text',
+  error,
+  helperText,
+  leftIcon,
+  rightIcon,
+  className = '',
+  containerClassName = '',
+  ...props
+}, ref) => {
+  return (
+    <div className={containerClassName}>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {label}
+        </label>
+      )}
+      <div className="relative">
+        {leftIcon && (
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            {leftIcon}
+          </div>
+        )}
+        <input
+          ref={ref}
+          type={type}
+          className={`
+            block w-full rounded-lg border-gray-300 shadow-sm
+            focus:ring-blue-500 focus:border-blue-500 sm:text-sm
+            ${error ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : ''}
+            ${leftIcon ? 'pl-10' : ''}
+            ${rightIcon ? 'pr-10' : ''}
+            ${className}
+          `}
+          {...props}
+        />
+        {rightIcon && (
+          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+            {rightIcon}
+          </div>
+        )}
+      </div>
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {helperText && !error && <p className="mt-1 text-sm text-gray-500">{helperText}</p>}
+    </div>
+  );
+});
+
+Input.displayName = 'Input';
+
+export default Input;
+===== src/components/customer/RestaurantCard.jsx =====
+
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { formatCurrency, getRatingStars } from '../../utils/helpers.js';
+
+const RestaurantCard = ({ restaurant }) => {
+  return (
+    <Link
+      to={`/restaurants/${restaurant.id}`}
+      className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+    >
+      <div className="relative h-48">
+        <img
+          src={restaurant.image_url || '/restaurant-placeholder.jpg'}
+          alt={restaurant.name}
+          className="w-full h-full object-cover"
+        />
+        {restaurant.avg_rating > 0 && (
+          <div className="absolute top-2 right-2 bg-white px-2 py-1 rounded-full flex items-center">
+            <span className="text-yellow-400 mr-1">★</span>
+            <span className="font-semibold">
+              {typeof restaurant.avg_rating === 'number' 
+                ? restaurant.avg_rating.toFixed(1) 
+                : Number(restaurant.avg_rating || 0).toFixed(1)}
+            </span>
+          </div>
+        )}
+      </div>
+      
+      <div className="p-4">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="font-bold text-lg truncate">{restaurant.name}</h3>
+        </div>
+        
+        <p className="text-gray-600 text-sm mb-2 truncate">{restaurant.location}</p>
+        
+        <div className="flex items-center text-sm text-gray-500 mb-3">
+          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+          </svg>
+          <span>{restaurant.distance || 'N/A'} miles</span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            {restaurant.avg_rating > 0 ? (
+                  <div className="flex items-center">
+                    {getRatingStars(restaurant.avg_rating).map(star => (
+                      <svg
+                        key={star.id}
+                        className={`w-4 h-4 ${star.className}`}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))} 
+                   <span className="ml-1 text-sm text-gray-600">
+                  ({restaurant.review_count || 0})
+                </span>
+              </div>
+            ) : (
+              <span className="text-sm text-gray-500">No reviews yet</span>
+            )}
+          </div>
+          
+          <div className="text-sm font-medium">
+            <span className="text-gray-500">•</span>
+            <span className="ml-1">{restaurant.cuisine_type || 'Various'}</span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+export default RestaurantCard;
+===== src/components/customer/MenuItemCard.jsx =====
+
+import React, { useState } from 'react';
+import { useCart } from '../../hooks/useCart.js';
+import { formatCurrency } from '../../utils/helpers.js';
+import Button from '../ui/Button.jsx';
+
+const MenuItemCard = ({ item, restaurant }) => {
+  const { addToCart, isSameRestaurant } = useCart();
+  const [quantity, setQuantity] = useState(1);
+  const [adding, setAdding] = useState(false);
+
+  const handleAddToCart = async () => {
+    if (!isSameRestaurant(restaurant.id) && restaurant.id) {
+      if (!window.confirm('Adding this item will clear your current cart. Continue?')) {
+        return;
+      }
+    }
+
+    setAdding(true);
+    try {
+      await addToCart({
+        ...item,
+        quantity,
+        restaurant_id: restaurant.id
+      }, restaurant);
+      
+      // Show success feedback
+      setQuantity(1);
+    } catch (error) {
+      console.error('Failed to add to cart:', error);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow">
+      <div className="flex">
+        {item.image_url && (
+          <div className="w-24 h-24 flex-shrink-0 mr-4">
+            <img
+              src={item.image_url}
+              alt={item.name}
+              className="w-full h-full object-cover rounded-lg"
+            />
+          </div>
+        )}
+        
+        <div className="flex-1">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h3 className="font-semibold text-lg">{item.name}</h3>
+              {item.description && (
+                <p className="text-gray-600 text-sm mt-1">{item.description}</p>
+              )}
+            </div>
+            <span className="font-bold text-lg">{formatCurrency(item.price)}</span>
+          </div>
+          
+          <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className="w-8 h-8 rounded-full border flex items-center justify-center hover:bg-gray-50"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                </svg>
+              </button>
+              
+              <span className="w-12 text-center font-medium">{quantity}</span>
+              
+              <button
+                onClick={() => setQuantity(quantity + 1)}
+                className="w-8 h-8 rounded-full border flex items-center justify-center hover:bg-gray-50"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </div>
+            
+            <Button
+              onClick={handleAddToCart}
+              loading={adding}
+              size="sm"
+              disabled={!item.availability}
+            >
+              {item.availability ? 'Add to Cart' : 'Unavailable'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MenuItemCard;
+===== src/components/customer/CartItem.jsx =====
+
+import React from 'react';
+import { useCart } from '../../hooks/useCart.js';
+import { formatCurrency } from '../../utils/helpers.js';
+
+const CartItem = ({ item }) => {
+  const { updateQuantity, removeFromCart } = useCart();
+
+  return (
+    <div className="flex items-center py-4 border-b border-gray-200 last:border-0">
+      <div className="flex-1">
+        <h4 className="font-medium">{item.name}</h4>
+        {item.description && (
+          <p className="text-gray-600 text-sm mt-1 truncate">{item.description}</p>
+        )}
+      </div>
+      
+      <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+            className="w-8 h-8 rounded-full border flex items-center justify-center hover:bg-gray-50"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+            </svg>
+          </button>
+          
+          <span className="w-8 text-center font-medium">{item.quantity}</span>
+          
+          <button
+            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+            className="w-8 h-8 rounded-full border flex items-center justify-center hover:bg-gray-50"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="text-right min-w-20">
+          <div className="font-semibold">{formatCurrency(item.price * item.quantity)}</div>
+          <div className="text-sm text-gray-500">{formatCurrency(item.price)} each</div>
+        </div>
+        
+        <button
+          onClick={() => removeFromCart(item.id)}
+          className="text-red-500 hover:text-red-700"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default CartItem;
+===== src/components/customer/OrderCard.jsx =====
+
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { formatCurrency, formatDate, getStatusColor, getStatusText } from '../../utils/helpers.js';
+import { ORDER_STATUS } from '../../utils/constants.js';
+
+const OrderCard = ({ order }) => {
+  return (
+    <Link
+      to={`/orders/${order.id}`}
+      className="block bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow"
+    >
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+        <div>
+          <h3 className="font-semibold text-lg">Order #{order.id}</h3>
+          <p className="text-gray-600 text-sm">
+            {order.restaurant_name || 'Restaurant'}
+          </p>
+        </div>
+
+        <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
+          {getStatusText(order.status)}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <p className="text-sm text-gray-500">Order Date</p>
+          <p className="font-medium">{formatDate(order.created_at)}</p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-500">Total Amount</p>
+          <p className="font-bold text-lg">{formatCurrency(order.total_price)}</p>
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-500">Items</p>
+          <p className="font-medium">
+            {order.items?.length || 0} items
+          </p>
+        </div>
+      </div>
+
+      <div className="border-t pt-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-sm text-gray-600">
+              {order.status === ORDER_STATUS.DELIVERED
+                ? `Delivered on ${formatDate(order.updated_at)}`
+                : `Placed on ${formatDate(order.created_at)}`
+              }
+            </span>
+          </div>
+
+          <span className="text-blue-600 font-medium hover:text-blue-800">
+            View Details →
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+export default OrderCard;
+===== src/components/restaurant/MenuItemForm.jsx =====
+
+import React, { useState, useEffect } from 'react';
+import Input from '../ui/Input.jsx';
+import Button from '../ui/Button.jsx';
+
+const MenuItemForm = ({ item = null, onSubmit, onCancel, loading = false }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    price: '',
+    image_url: '',
+    availability: true,
+    restaurant_id: ''
+  });
+
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (item) {
+      setFormData({
+        name: item.name || '',
+        description: item.description || '',
+        price: item.price || '',
+        image_url: item.image_url || '',
+        availability: item.availability !== undefined ? item.availability : true,
+        restaurant_id: item.restaurant_id || ''
+      });
+    }
+  }, [item]);
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+    }
+    
+    if (!formData.price || isNaN(formData.price) || Number(formData.price) <= 0) {
+      newErrors.price = 'Valid price is required';
+    }
+    
+    if (!formData.restaurant_id) {
+      newErrors.restaurant_id = 'Restaurant ID is required';
+    }
+    
+    return newErrors;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    
+    const submitData = {
+      ...formData,
+      price: Number(formData.price),
+      description: formData.description || null,
+      image_url: formData.image_url || null
+    };
+    
+    onSubmit(submitData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Input
+          label="Item Name *"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          error={errors.name}
+          placeholder="Enter item name"
+          required
+        />
+        
+        <Input
+          label="Price *"
+          name="price"
+          type="number"
+          step="0.01"
+          min="0"
+          value={formData.price}
+          onChange={handleChange}
+          error={errors.price}
+          placeholder="0.00"
+          leftIcon={
+            <span className="text-gray-500">$</span>
+          }
+          required
+        />
+        
+        <div className="md:col-span-2">
+          <Input
+            label="Description"
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            placeholder="Enter item description"
+          />
+        </div>
+        
+        <div className="md:col-span-2">
+          <Input
+            label="Image URL"
+            name="image_url"
+            value={formData.image_url}
+            onChange={handleChange}
+            placeholder="https://example.com/image.jpg"
+            helperText="Optional image URL for the menu item"
+          />
+        </div>
+        
+        {!item && (
+          <div className="md:col-span-2">
+            <Input
+              label="Restaurant ID *"
+              name="restaurant_id"
+              value={formData.restaurant_id}
+              onChange={handleChange}
+              error={errors.restaurant_id}
+              placeholder="Enter restaurant ID"
+              required
+            />
+          </div>
+        )}
+        
+        <div className="flex items-center">
+          <input
+            id="availability"
+            name="availability"
+            type="checkbox"
+            checked={formData.availability}
+            onChange={handleChange}
+            className="h-4 w-4 text-blue-600 rounded"
+          />
+          <label htmlFor="availability" className="ml-2 text-sm text-gray-700">
+            Available for ordering
+          </label>
+        </div>
+      </div>
+      
+      <div className="flex justify-end space-x-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={loading}
+        >
+          Cancel
+        </Button>
+        
+        <Button
+          type="submit"
+          loading={loading}
+        >
+          {item ? 'Update Item' : 'Add Item'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+export default MenuItemForm;
+===== src/components/restaurant/OrderStatusBadge.jsx =====
+
+import React from 'react';
+import { getStatusColor, getStatusText } from '../../utils/helpers.js';
+
+const OrderStatusBadge = ({ status, onStatusChange, disabled = false }) => {
+  const handleChange = (e) => {
+    if (onStatusChange) {
+      onStatusChange(e.target.value);
+    }
+  };
+
+  return (
+    <div className="flex items-center space-x-2">
+      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(status)}`}>
+        {getStatusText(status)}
+      </span>
+      
+      {onStatusChange && (
+        <select
+          value={status}
+          onChange={handleChange}
+          disabled={disabled}
+          className="text-sm border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="preparing">Preparing</option>
+          <option value="ready">Ready</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      )}
+    </div>
+  );
+};
+
+export default OrderStatusBadge;
+===== src/components/driver/DeliveryCard.jsx =====
+
+import React from 'react';
+import { formatCurrency, formatDate } from '../../utils/helpers.js';
+import Button from '../ui/Button.jsx';
+
+const DeliveryCard = ({ delivery, onAccept, onReject, onComplete, isHistory = false }) => {
+  return (
+    <div className="bg-white rounded-lg shadow-sm border p-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+        <div>
+          <h3 className="font-semibold text-lg">Order #{delivery.order_id}</h3>
+          <p className="text-gray-600">
+            From: {delivery.restaurant_name}
+          </p>
+          <p className="text-gray-600">
+            To: {delivery.customer_name}
+          </p>
+        </div>
+        
+        <div className="mt-2 md:mt-0">
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+            {delivery.status === 'pending' ? 'Waiting' : 
+             delivery.status === 'accepted' ? 'Accepted' :
+             delivery.status === 'completed' ? 'Completed' : 'Rejected'}
+          </span>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <p className="text-sm text-gray-500">Restaurant Location</p>
+          <p className="font-medium">{delivery.restaurant_location}</p>
+        </div>
+        
+        <div>
+          <p className="text-sm text-gray-500">Customer Address</p>
+          <p className="font-medium">{delivery.customer_address}</p>
+        </div>
+        
+        <div>
+          <p className="text-sm text-gray-500">Customer Phone</p>
+          <p className="font-medium">{delivery.customer_phone}</p>
+        </div>
+        
+        <div>
+          <p className="text-sm text-gray-500">Order Total</p>
+          <p className="font-bold text-lg">{formatCurrency(delivery.total_price)}</p>
+        </div>
+      </div>
+      
+      {!isHistory && (
+        <div className="border-t pt-4">
+          <div className="flex flex-col sm:flex-row sm:space-x-3 space-y-2 sm:space-y-0">
+            {delivery.status === 'pending' && (
+              <>
+                <Button
+                  onClick={() => onAccept(delivery.id)}
+                  variant="success"
+                  className="flex-1"
+                >
+                  Accept Delivery
+                </Button>
+                
+                <Button
+                  onClick={() => onReject(delivery.id)}
+                  variant="danger"
+                  className="flex-1"
+                >
+                  Reject
+                </Button>
+              </>
+            )}
+            
+            {delivery.status === 'accepted' && delivery.order_status === 'on_the_way' && (
+              <Button
+                onClick={() => onComplete(delivery.order_id)}
+                variant="success"
+                className="flex-1"
+              >
+                Mark as Delivered
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      
+      <div className="mt-4 pt-4 border-t text-sm text-gray-500">
+        <div className="flex items-center">
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {isHistory 
+            ? `Completed on ${formatDate(delivery.completed_at || delivery.assigned_at)}`
+            : `Requested on ${formatDate(delivery.assigned_at)}`
+          }
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DeliveryCard;

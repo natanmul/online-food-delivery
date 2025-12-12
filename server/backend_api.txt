@@ -1,0 +1,1769 @@
+import express from 'express';
+import { register, login, getMe } from '../controllers/authController.js';
+import { protect } from '../middleware/auth.js';
+import { validate, registerValidation, loginValidation } from '../middleware/validation.js';
+
+const router = express.Router();
+
+// Public routes
+router.post('/register', validate(registerValidation), register);
+router.post('/login', validate(loginValidation), login);
+
+// Protected route
+router.get('/me', protect, getMe);
+
+export default router;import express from 'express';
+import {
+  getAllRestaurants,
+  getRestaurant,
+  createRestaurant,
+  updateRestaurant,
+  getMyRestaurant
+} from '../controllers/restaurantController.js';
+import { protect, authorize } from '../middleware/auth.js';
+import { validate, restaurantValidation } from '../middleware/validation.js';
+
+const router = express.Router();
+
+// Public routes
+router.get('/', getAllRestaurants);
+router.get('/:id', getRestaurant);
+
+// Protected routes
+router.post(
+  '/',
+  protect,
+  authorize('restaurant'),
+  validate(restaurantValidation),
+  createRestaurant
+);
+
+router.put(
+  '/:id',
+  protect,
+  validate(restaurantValidation),
+  updateRestaurant
+);
+
+router.get(
+  '/owner/my-restaurant',
+  protect,
+  authorize('restaurant'),
+  getMyRestaurant
+);
+
+export default router;import express from 'express';
+import {
+  getMenuItems,
+  createMenuItem,
+  updateMenuItem,
+  deleteMenuItem
+} from '../controllers/menuController.js';
+import { protect, authorize } from '../middleware/auth.js';
+import { validate, menuItemValidation } from '../middleware/validation.js';
+
+const router = express.Router();
+
+// Public route
+router.get('/restaurants/:restaurantId/menu', getMenuItems);
+
+// Protected routes
+router.post(
+  '/',
+  protect,
+  authorize('restaurant', 'admin'),
+  validate(menuItemValidation),
+  createMenuItem
+);
+
+router.put(
+  '/:id',
+  protect,
+  authorize('restaurant', 'admin'),
+  validate(menuItemValidation),
+  updateMenuItem
+);
+
+router.delete(
+  '/:id',
+  protect,
+  authorize('restaurant', 'admin'),
+  deleteMenuItem
+);
+
+export default router;import express from 'express';
+import {
+  createOrder,
+  getMyOrders,
+  getOrder,
+  updateOrderStatus
+} from '../controllers/orderController.js';
+import { protect, authorize } from '../middleware/auth.js';
+import { validate, orderValidation } from '../middleware/validation.js';
+
+const router = express.Router();
+
+// All routes are protected
+router.use(protect);
+
+// Customer routes
+router.post(
+  '/',
+  authorize('customer'),
+  validate(orderValidation),
+  createOrder
+);
+
+// Get orders based on user role
+router.get('/my-orders', getMyOrders);
+router.get('/:id', getOrder);
+
+// Update order status (restaurant, driver, admin)
+router.put(
+  '/:id/status',
+  authorize('restaurant', 'driver', 'admin'),
+  updateOrderStatus
+);
+
+export default router;import express from 'express';
+import {
+  createReview,
+  getRestaurantReviews,
+  getMyReviews
+} from '../controllers/reviewController.js';
+import { protect, authorize } from '../middleware/auth.js';
+import { validate, reviewValidation } from '../middleware/validation.js';
+
+const router = express.Router();
+
+// Public routes
+router.get('/restaurants/:restaurantId/reviews', getRestaurantReviews);
+
+// Protected routes
+router.post('/', protect, authorize('customer'), validate(reviewValidation), createReview);
+router.get('/my-reviews', protect, getMyReviews);
+
+export default router;import express from 'express';
+import {
+  getDeliveryRequests,
+  acceptDeliveryRequest,
+  rejectDeliveryRequest,
+  completeDelivery,
+  getDeliveryHistory
+} from '../controllers/deliveryController.js';
+import { protect, authorize } from '../middleware/auth.js';
+
+const router = express.Router();
+
+// All routes are protected for drivers
+router.use(protect);
+router.use(authorize('driver'));
+
+router.get('/requests', getDeliveryRequests);
+router.put('/requests/:id/accept', acceptDeliveryRequest);
+router.put('/requests/:id/reject', rejectDeliveryRequest);
+router.put('/orders/:id/complete', completeDelivery);
+router.get('/history', getDeliveryHistory);
+
+export default router;import express from 'express';
+import {
+  getAllUsers,
+  deleteUser,
+  updateUserRole,
+  getStatistics,
+  generateReport,
+  getReports
+} from '../controllers/adminController.js';
+import { protect, authorize } from '../middleware/auth.js';
+import { getAllDeliveryRequests } from '../controllers/adminController.js';
+const router = express.Router();
+
+// All routes are protected for admins only
+router.use(protect);
+router.use(authorize('admin'));
+
+// User management
+router.get('/users', getAllUsers);
+router.delete('/users/:id', deleteUser);
+router.put('/users/:id/role', updateUserRole);
+router.get('/delivery-requests', getAllDeliveryRequests);
+// Reports and statistics
+router.get('/statistics', getStatistics);
+router.post('/reports', generateReport);
+router.get('/reports', getReports);
+
+export default router;import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { query } from '../config/database.js';
+
+export const register = async (req, res) => {
+  try {
+    const { name, email, password, phone, address, role } = req.body;
+
+    // Check if user exists
+    const [existingUser] = await query(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (existingUser.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'User already exists with this email' 
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Insert user
+    const [result] = await query(
+      `INSERT INTO users (name, email, phone, password, address, role) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [name, email, phone || null, hashedPassword, address || null, role]
+    );
+
+    // Create JWT token
+    const token = jwt.sign(
+      { id: result.insertId, email, role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE }
+    );
+
+    res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: result.insertId,
+        name,
+        email,
+        role
+      }
+    });
+  } catch (error) {
+    console.error('Register Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error during registration' 
+    });
+  }
+};
+
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check if user exists
+    const [users] = await query(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Invalid email or password' 
+      });
+    }
+
+    const user = users[0];
+
+    // Check password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Invalid email or password' 
+      });
+    }
+
+    // Create JWT token
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE }
+    );
+
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
+
+    res.json({
+      success: true,
+      token,
+      user: userWithoutPassword
+    });
+  } catch (error) {
+    console.error('Login Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error during login' 
+    });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const [users] = await query(
+      `SELECT id, name, email, phone, address, role, created_at 
+       FROM users WHERE id = ?`,
+      [req.user.id]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      user: users[0]
+    });
+  } catch (error) {
+    console.error('GetMe Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error' 
+    });
+  }
+};import { query } from '../config/database.js';
+
+export const getAllRestaurants = async (req, res) => {
+  try {
+    const { search, minPrice, maxPrice, rating } = req.query;
+    
+    let queryStr = `
+      SELECT r.*, 
+        COALESCE(AVG(rev.rating), 0) as avg_rating,
+        COUNT(DISTINCT rev.id) as review_count
+      FROM restaurants r
+      LEFT JOIN reviews rev ON r.id = rev.restaurant_id
+    `;
+    
+    const conditions = [];
+    const params = [];
+    
+    if (search) {
+      conditions.push('r.name LIKE ?');
+      params.push(`%${search}%`);
+    }
+    
+    if (conditions.length > 0) {
+      queryStr += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    queryStr += ' GROUP BY r.id HAVING 1=1';
+    
+    if (rating) {
+      queryStr += ' AND avg_rating >= ?';
+      params.push(rating);
+    }
+    
+    const [restaurants] = await query(queryStr, params);
+    
+    res.json({
+      success: true,
+      count: restaurants.length,
+      data: restaurants
+    });
+  } catch (error) {
+    console.error('GetAllRestaurants Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching restaurants' 
+    });
+  }
+};
+
+export const getRestaurant = async (req, res) => {
+  try {
+    const [restaurants] = await query(
+      `SELECT r.*, 
+        COALESCE(AVG(rev.rating), 0) as avg_rating,
+        COUNT(DISTINCT rev.id) as review_count
+       FROM restaurants r
+       LEFT JOIN reviews rev ON r.id = rev.restaurant_id
+       WHERE r.id = ?
+       GROUP BY r.id`,
+      [req.params.id]
+    );
+    
+    if (restaurants.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Restaurant not found' 
+      });
+    }
+    
+    // Get menu items
+    const [menuItems] = await query(
+      'SELECT * FROM menu_items WHERE restaurant_id = ? AND availability = TRUE ORDER BY name',
+      [req.params.id]
+    );
+    
+    // Get reviews
+    const [reviews] = await query(
+      `SELECT rev.*, u.name as user_name
+       FROM reviews rev
+       JOIN users u ON rev.user_id = u.id
+       WHERE rev.restaurant_id = ?
+       ORDER BY rev.created_at DESC`,
+      [req.params.id]
+    );
+    
+    res.json({
+      success: true,
+      data: {
+        ...restaurants[0],
+        menu_items: menuItems,
+        reviews: reviews
+      }
+    });
+  } catch (error) {
+    console.error('GetRestaurant Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching restaurant' 
+    });
+  }
+};
+
+export const createRestaurant = async (req, res) => {
+  try {
+    const { name, location, phone } = req.body;
+    
+    // Check if user already has a restaurant
+    const [existingRestaurants] = await query(
+      'SELECT id FROM restaurants WHERE user_id = ?',
+      [req.user.id]
+    );
+    
+    if (existingRestaurants.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'You already have a restaurant' 
+      });
+    }
+    
+    const [result] = await query(
+      `INSERT INTO restaurants (user_id, name, location, phone)
+       VALUES (?, ?, ?, ?)`,
+      [req.user.id, name, location, phone || null]
+    );
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id: result.insertId,
+        user_id: req.user.id,
+        name,
+        location,
+        phone
+      }
+    });
+  } catch (error) {
+    console.error('CreateRestaurant Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error creating restaurant' 
+    });
+  }
+};
+
+export const updateRestaurant = async (req, res) => {
+  try {
+    const { name, location, phone } = req.body;
+    
+    // Check if restaurant exists and user owns it (or is admin)
+    const [restaurants] = await query(
+      'SELECT user_id FROM restaurants WHERE id = ?',
+      [req.params.id]
+    );
+    
+    if (restaurants.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Restaurant not found' 
+      });
+    }
+    
+    if (req.user.role !== 'admin' && restaurants[0].user_id !== req.user.id) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to update this restaurant' 
+      });
+    }
+    
+    await query(
+      `UPDATE restaurants 
+       SET name = ?, location = ?, phone = ?
+       WHERE id = ?`,
+      [name, location, phone, req.params.id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Restaurant updated successfully'
+    });
+  } catch (error) {
+    console.error('UpdateRestaurant Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error updating restaurant' 
+    });
+  }
+};
+
+export const getMyRestaurant = async (req, res) => {
+  try {
+    const [restaurants] = await query(
+      'SELECT * FROM restaurants WHERE user_id = ?',
+      [req.user.id]
+    );
+    
+    if (restaurants.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Restaurant not found for this user' 
+      });
+    }
+    
+    // Get menu items for the restaurant
+    const [menuItems] = await query(
+      'SELECT * FROM menu_items WHERE restaurant_id = ? ORDER BY created_at DESC',
+      [restaurants[0].id]
+    );
+    
+    res.json({
+      success: true,
+      data: {
+        ...restaurants[0],
+        menu_items: menuItems
+      }
+    });
+  } catch (error) {
+    console.error('GetMyRestaurant Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching restaurant' 
+    });
+  }
+};import { query } from '../config/database.js';
+
+export const getMenuItems = async (req, res) => {
+  try {
+    const [menuItems] = await query(
+      `SELECT m.*, r.name as restaurant_name
+       FROM menu_items m
+       JOIN restaurants r ON m.restaurant_id = r.id
+       WHERE m.restaurant_id = ? AND m.availability = TRUE
+       ORDER BY m.created_at DESC`,
+      [req.params.restaurantId]
+    );
+    
+    res.json({
+      success: true,
+      count: menuItems.length,
+      data: menuItems
+    });
+  } catch (error) {
+    console.error('GetMenuItems Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching menu items' 
+    });
+  }
+};
+
+export const createMenuItem = async (req, res) => {
+  try {
+    const { restaurant_id, name, description, price, image_url, availability = true } = req.body;
+    
+    // Verify restaurant exists and user owns it
+    const [restaurants] = await query(
+      'SELECT user_id FROM restaurants WHERE id = ?',
+      [restaurant_id]
+    );
+    
+    if (restaurants.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Restaurant not found' 
+      });
+    }
+    
+    // Check if user owns the restaurant or is admin
+    if (req.user.role !== 'admin' && Number(restaurants[0].user_id )!== Number(req.user.id)) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to add menu items to this restaurant' 
+      });
+    }
+    
+    const [result] = await query(
+      `INSERT INTO menu_items (restaurant_id, name, description, price, image_url, availability)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [restaurant_id, name, description || null, price, image_url || null, availability]
+    );
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id: result.insertId,
+        restaurant_id,
+        name,
+        description,
+        price,
+        image_url,
+        availability
+      }
+    });
+  } catch (error) {
+    console.error('CreateMenuItem Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error creating menu item' 
+    });
+  }
+};
+
+export const updateMenuItem = async (req, res) => {
+  try {
+    const { name, description, price, image_url, availability } = req.body;
+    
+    // Get menu item with restaurant info
+    const [menuItems] = await query(
+      `SELECT m.*, r.user_id as restaurant_owner_id
+       FROM menu_items m
+       JOIN restaurants r ON m.restaurant_id = r.id
+       WHERE m.id = ?`,
+      [req.params.id]
+    );
+    
+    if (menuItems.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Menu item not found' 
+      });
+    }
+    
+    if (req.user.role !== 'admin' && menuItems[0].restaurant_owner_id !== req.user.id) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to update this menu item' 
+      });
+    }
+    
+    await query(
+      `UPDATE menu_items 
+       SET name = ?, description = ?, price = ?, image_url = ?, availability = ?
+       WHERE id = ?`,
+      [
+        name || menuItems[0].name,
+        description !== undefined ? description : menuItems[0].description,
+        price || menuItems[0].price,
+        image_url !== undefined ? image_url : menuItems[0].image_url,
+        availability !== undefined ? availability : menuItems[0].availability,
+        req.params.id
+      ]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Menu item updated successfully'
+    });
+  } catch (error) {
+    console.error('UpdateMenuItem Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error updating menu item' 
+    });
+  }
+};
+
+export const deleteMenuItem = async (req, res) => {
+  try {
+    // Get menu item with restaurant info
+    const [menuItems] = await query(
+      `SELECT m.*, r.user_id as restaurant_owner_id
+       FROM menu_items m
+       JOIN restaurants r ON m.restaurant_id = r.id
+       WHERE m.id = ?`,
+      [req.params.id]
+    );
+    
+    if (menuItems.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Menu item not found' 
+      });
+    }
+    
+    if (req.user.role !== 'admin' && menuItems[0].restaurant_owner_id !== req.user.id) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to delete this menu item' 
+      });
+    }
+    
+    await query('DELETE FROM menu_items WHERE id = ?', [req.params.id]);
+    
+    res.json({
+      success: true,
+      message: 'Menu item deleted successfully'
+    });
+  } catch (error) {
+    console.error('DeleteMenuItem Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error deleting menu item' 
+    });
+  }
+};import { query, getConnection } from '../config/database.js';
+
+export const createOrder = async (req, res) => {
+  const connection = await getConnection();
+  
+  try {
+    const { restaurant_id, items, type = 'delivery', payment_method = 'cash' } = req.body;
+    
+    await connection.beginTransaction();
+    
+    try {
+      // Calculate total price
+      let totalPrice = 0;
+      for (const item of items) {
+        const [menuItems] = await connection.query(
+          'SELECT price, availability, name FROM menu_items WHERE id = ?',
+          [item.menu_item_id]
+        );
+        
+        if (menuItems.length === 0) {
+          throw new Error(`Menu item with ID ${item.menu_item_id} not found`);
+        }
+        
+        if (!menuItems[0].availability) {
+          throw new Error(`Menu item "${menuItems[0].name}" is not available`);
+        }
+        
+        totalPrice += menuItems[0].price * item.quantity;
+      }
+      
+      // Create order
+      const [orderResult] = await connection.query(
+        `INSERT INTO orders (user_id, restaurant_id, total_price, payment_method, type, status)
+         VALUES (?, ?, ?, ?, ?, 'pending')`,
+        [req.user.id, restaurant_id, totalPrice, payment_method, type]
+      );
+      
+      const orderId = orderResult.insertId;
+      
+      // Add order items
+      for (const item of items) {
+        const [menuItems] = await connection.query(
+          'SELECT price FROM menu_items WHERE id = ?',
+          [item.menu_item_id]
+        );
+        
+        await connection.query(
+          `INSERT INTO order_items (order_id, menu_item_id, quantity, price)
+           VALUES (?, ?, ?, ?)`,
+          [orderId, item.menu_item_id, item.quantity, menuItems[0].price]
+        );
+      }
+      
+      // If delivery order, create delivery requests
+      if (type === 'delivery') {
+        const [drivers] = await connection.query(
+          'SELECT id FROM users WHERE role = "driver"'
+        );
+        
+        for (const driver of drivers) {
+          await connection.query(
+            `INSERT INTO delivery_requests (order_id, driver_id, status)
+             VALUES (?, ?, 'pending')`,
+            [orderId, driver.id]
+          );
+        }
+      }
+      
+      await connection.commit();
+      
+      // Get complete order details
+      const [orders] = await query(
+        `SELECT o.*, r.name as restaurant_name, u.name as customer_name
+         FROM orders o
+         JOIN restaurants r ON o.restaurant_id = r.id
+         JOIN users u ON o.user_id = u.id
+         WHERE o.id = ?`,
+        [orderId]
+      );
+      
+      const [orderItems] = await query(
+        `SELECT oi.*, mi.name as item_name, mi.image_url
+         FROM order_items oi
+         JOIN menu_items mi ON oi.menu_item_id = mi.id
+         WHERE oi.order_id = ?`,
+        [orderId]
+      );
+      
+      res.status(201).json({
+        success: true,
+        data: {
+          ...orders[0],
+          items: orderItems
+        }
+      });
+      
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('CreateOrder Error:', error);
+    res.status(400).json({ 
+      success: false,
+      message: error.message || 'Error creating order' 
+    });
+  }
+};
+
+export const getMyOrders = async (req, res) => {
+  try {
+    let queryStr;
+    let params = [];
+    
+    if (req.user.role === 'customer') {
+      queryStr = `
+        SELECT o.*, r.name as restaurant_name, r.location as restaurant_location
+        FROM orders o
+        JOIN restaurants r ON o.restaurant_id = r.id
+        WHERE o.user_id = ?
+        ORDER BY o.created_at DESC
+      `;
+      params = [req.user.id];
+    } else if (req.user.role === 'restaurant') {
+      // Get restaurant ID for this user
+      const [restaurants] = await query(
+        'SELECT id FROM restaurants WHERE user_id = ?',
+        [req.user.id]
+      );
+      
+      if (restaurants.length === 0) {
+        return res.json({ 
+          success: true, 
+          data: [] 
+        });
+      }
+      
+      queryStr = `
+        SELECT o.*, u.name as customer_name, u.phone as customer_phone
+        FROM orders o
+        JOIN users u ON o.user_id = u.id
+        WHERE o.restaurant_id = ?
+        ORDER BY o.created_at DESC
+      `;
+      params = [restaurants[0].id];
+    } else if (req.user.role === 'driver') {
+      queryStr = `
+        SELECT o.*, r.name as restaurant_name, r.location as restaurant_location,
+               u.name as customer_name, u.address as customer_address
+        FROM orders o
+        JOIN restaurants r ON o.restaurant_id = r.id
+        JOIN users u ON o.user_id = u.id
+        WHERE o.delivery_driver_id = ?
+        ORDER BY o.created_at DESC
+      `;
+      params = [req.user.id];
+    } else if (req.user.role === 'admin') {
+      queryStr = `
+        SELECT o.*, r.name as restaurant_name, u.name as customer_name
+        FROM orders o
+        JOIN restaurants r ON o.restaurant_id = r.id
+        JOIN users u ON o.user_id = u.id
+        ORDER BY o.created_at DESC
+      `;
+    }
+    
+    const [orders] = await query(queryStr, params);
+    
+    // Get order items for each order
+    for (let order of orders) {
+      const [items] = await query(
+        `SELECT oi.*, mi.name as item_name
+         FROM order_items oi
+         JOIN menu_items mi ON oi.menu_item_id = mi.id
+         WHERE oi.order_id = ?`,
+        [order.id]
+      );
+      order.items = items;
+    }
+    
+    res.json({
+      success: true,
+      count: orders.length,
+      data: orders
+    });
+  } catch (error) {
+    console.error('GetMyOrders Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching orders' 
+    });
+  }
+};
+
+export const getOrder = async (req, res) => {
+  try {
+    const [orders] = await query(
+      `SELECT o.*, r.name as restaurant_name, r.location as restaurant_location,
+              u.name as customer_name, u.phone as customer_phone, u.address as customer_address
+       FROM orders o
+       JOIN restaurants r ON o.restaurant_id = r.id
+       JOIN users u ON o.user_id = u.id
+       WHERE o.id = ?`,
+      [req.params.id]
+    );
+    
+    if (orders.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Order not found' 
+      });
+    }
+    
+    const order = orders[0];
+    
+    // Authorization check
+    if (req.user.role === 'customer' && order.user_id !== req.user.id) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to view this order' 
+      });
+    }
+    
+    if (req.user.role === 'restaurant') {
+      const [restaurants] = await query(
+        'SELECT id FROM restaurants WHERE user_id = ?',
+        [req.user.id]
+      );
+      if (restaurants.length === 0 || order.restaurant_id !== restaurants[0].id) {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Not authorized to view this order' 
+        });
+      }
+    }
+    
+    // Get order items
+    const [items] = await query(
+      `SELECT oi.*, mi.name as item_name, mi.image_url
+       FROM order_items oi
+       JOIN menu_items mi ON oi.menu_item_id = mi.id
+       WHERE oi.order_id = ?`,
+      [req.params.id]
+    );
+    
+    // Get driver info if exists
+    let driver = null;
+    if (order.delivery_driver_id) {
+      const [drivers] = await query(
+        'SELECT name, phone FROM users WHERE id = ?',
+        [order.delivery_driver_id]
+      );
+      driver = drivers[0] || null;
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        ...order,
+        items: items,
+        driver: driver
+      }
+    });
+  } catch (error) {
+    console.error('GetOrder Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching order' 
+    });
+  }
+};
+
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const validStatuses = ['pending', 'accepted', 'preparing', 'ready', 'on_the_way', 'delivered', 'cancelled'];
+    
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid status' 
+      });
+    }
+    
+    // Get current order
+    const [orders] = await query(
+      `SELECT o.*, r.user_id as restaurant_owner_id
+       FROM orders o
+       JOIN restaurants r ON o.restaurant_id = r.id
+       WHERE o.id = ?`,
+      [req.params.id]
+    );
+    
+    if (orders.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Order not found' 
+      });
+    }
+    
+    const order = orders[0];
+    
+    // Authorization check
+    let isAuthorized = false;
+    const validRestaurantStatuses = ['accepted', 'preparing', 'ready', 'cancelled'];
+    const validDriverStatuses = ['on_the_way', 'delivered'];
+    
+    if (req.user.role === 'admin') {
+      isAuthorized = true;
+    } else if (req.user.role === 'restaurant' && order.restaurant_owner_id === req.user.id) {
+      if (validRestaurantStatuses.includes(status)) {
+        isAuthorized = true;
+      }
+    } else if (req.user.role === 'driver' && order.delivery_driver_id === req.user.id) {
+      if (validDriverStatuses.includes(status)) {
+        isAuthorized = true;
+      }
+    }
+    
+    if (!isAuthorized) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to update this order status' 
+      });
+    }
+    
+    await query(
+      'UPDATE orders SET status = ? WHERE id = ?',
+      [status, req.params.id]
+    );
+    
+    // If status is 'ready' and order is delivery, notify drivers
+    if (status === 'ready' && order.type === 'delivery') {
+      const [drivers] = await query(
+        'SELECT id FROM users WHERE role = "driver"'
+      );
+      
+      for (const driver of drivers) {
+        await query(
+          `INSERT INTO delivery_requests (order_id, driver_id, status)
+           VALUES (?, ?, 'pending')
+           ON DUPLICATE KEY UPDATE status = 'pending'`,
+          [req.params.id, driver.id]
+        );
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Order status updated to ${status}`
+    });
+  } catch (error) {
+    console.error('UpdateOrderStatus Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error updating order status' 
+    });
+  }
+};import { query } from '../config/database.js';
+
+export const createReview = async (req, res) => {
+  try {
+    const { restaurant_id, order_id, rating, comment } = req.body;
+    
+    // Check if user has ordered from this restaurant
+    const [orders] = await query(
+      `SELECT id FROM orders 
+       WHERE user_id = ? AND restaurant_id = ? AND status = 'delivered'`,
+      [req.user.id, restaurant_id]
+    );
+    
+    if (orders.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'You can only review restaurants you have ordered from and received delivery' 
+      });
+    }
+    
+    // Check if already reviewed for this order
+    if (order_id) {
+      const [existingOrderReviews] = await query(
+        'SELECT id FROM reviews WHERE user_id = ? AND order_id = ?',
+        [req.user.id, order_id]
+      );
+      
+      if (existingOrderReviews.length > 0) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'You have already reviewed this order' 
+        });
+      }
+    }
+    
+    const [result] = await query(
+      `INSERT INTO reviews (user_id, restaurant_id, order_id, rating, comment)
+       VALUES (?, ?, ?, ?, ?)`,
+      [req.user.id, restaurant_id, order_id || null, rating, comment || null]
+    );
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id: result.insertId,
+        user_id: req.user.id,
+        restaurant_id,
+        order_id,
+        rating,
+        comment
+      }
+    });
+  } catch (error) {
+    console.error('CreateReview Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error creating review' 
+    });
+  }
+};
+
+export const getRestaurantReviews = async (req, res) => {
+  try {
+    const [reviews] = await query(
+      `SELECT r.*, u.name as user_name
+       FROM reviews r
+       JOIN users u ON r.user_id = u.id
+       WHERE r.restaurant_id = ?
+       ORDER BY r.created_at DESC`,
+      [req.params.restaurantId]
+    );
+    
+    // Calculate average rating
+    const [stats] = await query(
+      `SELECT 
+        COALESCE(AVG(rating), 0) as avg_rating, 
+        COUNT(*) as total_reviews,
+        COUNT(CASE WHEN rating = 5 THEN 1 END) as five_stars,
+        COUNT(CASE WHEN rating = 4 THEN 1 END) as four_stars,
+        COUNT(CASE WHEN rating = 3 THEN 1 END) as three_stars,
+        COUNT(CASE WHEN rating = 2 THEN 1 END) as two_stars,
+        COUNT(CASE WHEN rating = 1 THEN 1 END) as one_stars
+       FROM reviews
+       WHERE restaurant_id = ?`,
+      [req.params.restaurantId]
+    );
+    
+    res.json({
+      success: true,
+      data: reviews,
+      stats: stats[0]
+    });
+  } catch (error) {
+    console.error('GetRestaurantReviews Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching reviews' 
+    });
+  }
+};
+
+export const getMyReviews = async (req, res) => {
+  try {
+    const [reviews] = await query(
+      `SELECT r.*, res.name as restaurant_name
+       FROM reviews r
+       JOIN restaurants res ON r.restaurant_id = res.id
+       WHERE r.user_id = ?
+       ORDER BY r.created_at DESC`,
+      [req.user.id]
+    );
+    
+    res.json({
+      success: true,
+      data: reviews
+    });
+  } catch (error) {
+    console.error('GetMyReviews Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching reviews' 
+    });
+  }
+};import { query, getConnection } from '../config/database.js';
+
+export const getDeliveryRequests = async (req, res) => {
+  try {
+    const [requests] = await query(
+      `SELECT dr.*, o.total_price, o.status as order_status,
+              r.name as restaurant_name, r.location as restaurant_location,
+              u.name as customer_name, u.address as customer_address,
+              u.phone as customer_phone
+       FROM delivery_requests dr
+       JOIN orders o ON dr.order_id = o.id
+       JOIN restaurants r ON o.restaurant_id = r.id
+       JOIN users u ON o.user_id = u.id
+       WHERE dr.driver_id = ? AND dr.status = 'pending'
+       ORDER BY dr.assigned_at DESC`,
+      [req.user.id]
+    );
+    
+    res.json({
+      success: true,
+      count: requests.length,
+      data: requests
+    });
+  } catch (error) {
+    console.error('GetDeliveryRequests Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching delivery requests' 
+    });
+  }
+};
+
+export const acceptDeliveryRequest = async (req, res) => {
+  const connection = await getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Check if request exists and is pending
+    const [requests] = await connection.query(
+      `SELECT dr.*, o.status as order_status, o.id as order_id
+       FROM delivery_requests dr
+       JOIN orders o ON dr.order_id = o.id
+       WHERE dr.id = ? AND dr.driver_id = ? AND dr.status = 'pending'`,
+      [req.params.id, req.user.id]
+    );
+    
+    if (requests.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ 
+        success: false,
+        message: 'Delivery request not found or already processed' 
+      });
+    }
+    
+    const request = requests[0];
+    
+    if (request.order_status !== 'ready') {
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false,
+        message: 'Order is not ready for delivery' 
+      });
+    }
+    
+    // Update delivery request
+    await connection.query(
+      `UPDATE delivery_requests 
+       SET status = 'accepted'
+       WHERE id = ?`,
+      [req.params.id]
+    );
+    
+    // Update order with driver and status
+    await connection.query(
+      `UPDATE orders 
+       SET delivery_driver_id = ?, status = 'on_the_way'
+       WHERE id = ?`,
+      [req.user.id, request.order_id]
+    );
+    
+    // Reject other pending requests for same order
+    await connection.query(
+      `UPDATE delivery_requests 
+       SET status = 'rejected'
+       WHERE order_id = ? AND id != ? AND status = 'pending'`,
+      [request.order_id, req.params.id]
+    );
+    
+    await connection.commit();
+    
+    res.json({
+      success: true,
+      message: 'Delivery request accepted successfully'
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('AcceptDeliveryRequest Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error accepting delivery request' 
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+export const rejectDeliveryRequest = async (req, res) => {
+  try {
+    const [requests] = await query(
+      'SELECT * FROM delivery_requests WHERE id = ? AND driver_id = ? AND status = "pending"',
+      [req.params.id, req.user.id]
+    );
+    
+    if (requests.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Delivery request not found' 
+      });
+    }
+    
+    await query(
+      `UPDATE delivery_requests 
+       SET status = 'rejected'
+       WHERE id = ?`,
+      [req.params.id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Delivery request rejected'
+    });
+  } catch (error) {
+    console.error('RejectDeliveryRequest Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error rejecting delivery request' 
+    });
+  }
+};
+
+export const completeDelivery = async (req, res) => {
+  try {
+    // Check if order exists and driver is assigned
+    const [orders] = await query(
+      `SELECT o.* 
+       FROM orders o
+       WHERE o.id = ? AND o.delivery_driver_id = ? AND o.status = 'on_the_way'`,
+      [req.params.id, req.user.id]
+    );
+    
+    if (orders.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Order not found or not assigned to you' 
+      });
+    }
+    
+    // Update order status
+    await query(
+      `UPDATE orders 
+       SET status = 'delivered'
+       WHERE id = ?`,
+      [req.params.id]
+    );
+    
+    // Update delivery request
+    await query(
+      `UPDATE delivery_requests 
+       SET status = 'completed', completed_at = CURRENT_TIMESTAMP
+       WHERE order_id = ? AND driver_id = ?`,
+      [req.params.id, req.user.id]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Delivery completed successfully'
+    });
+  } catch (error) {
+    console.error('CompleteDelivery Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error completing delivery' 
+    });
+  }
+};
+
+export const getDeliveryHistory = async (req, res) => {
+  try {
+    const [deliveries] = await query(
+      `SELECT dr.*, o.total_price, o.created_at as order_date,
+              r.name as restaurant_name, 
+              u.name as customer_name,
+              u.address as customer_address
+       FROM delivery_requests dr
+       JOIN orders o ON dr.order_id = o.id
+       JOIN restaurants r ON o.restaurant_id = r.id
+       JOIN users u ON o.user_id = u.id
+       WHERE dr.driver_id = ? AND dr.status IN ('accepted', 'completed')
+       ORDER BY dr.assigned_at DESC`,
+      [req.user.id]
+    );
+    
+    res.json({
+      success: true,
+      count: deliveries.length,
+      data: deliveries
+    });
+  } catch (error) {
+    console.error('GetDeliveryHistory Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching delivery history' 
+    });
+  }
+};import { query } from '../config/database.js';
+
+export const getAllUsers = async (req, res) => {
+  try {
+    const { role } = req.query;
+    let queryStr = 'SELECT id, name, email, phone, role, created_at FROM users';
+    const params = [];
+    
+    if (role) {
+      queryStr += ' WHERE role = ?';
+      params.push(role);
+    }
+    
+    queryStr += ' ORDER BY created_at DESC';
+    
+    const [users] = await query(queryStr, params);
+    
+    res.json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    console.error('GetAllUsers Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching users' 
+    });
+  }
+};
+
+export const deleteUser = async (req, res) => {
+  try {
+    // Cannot delete yourself
+    if (parseInt(req.params.id) === req.user.id) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Cannot delete yourself' 
+      });
+    }
+    
+    const [result] = await query('DELETE FROM users WHERE id = ?', [req.params.id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    console.error('DeleteUser Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error deleting user' 
+    });
+  }
+};
+
+export const updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    const validRoles = ['customer', 'restaurant', 'driver', 'admin'];
+    
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid role' 
+      });
+    }
+    
+    const [result] = await query(
+      'UPDATE users SET role = ? WHERE id = ?',
+      [role, req.params.id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `User role updated to ${role}`
+    });
+  } catch (error) {
+    console.error('UpdateUserRole Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error updating user role' 
+    });
+  }
+};
+
+export const getStatistics = async (req, res) => {
+  try {
+    // Get counts
+    const [userCounts] = await query(
+      `SELECT role, COUNT(*) as count 
+       FROM users 
+       GROUP BY role`
+    );
+    
+    const [orderStats] = await query(
+      `SELECT 
+         COUNT(*) as total_orders,
+         SUM(total_price) as total_revenue,
+         AVG(total_price) as avg_order_value,
+         COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered_orders,
+         COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_orders
+       FROM orders`
+    );
+    
+    const [orderStatusCounts] = await query(
+      `SELECT status, COUNT(*) as count 
+       FROM orders 
+       GROUP BY status`
+    );
+    
+    const [restaurantStats] = await query(
+      `SELECT 
+         COUNT(*) as total_restaurants,
+         (SELECT COUNT(*) FROM menu_items WHERE availability = 1) as active_menu_items
+       FROM restaurants`
+    );
+    
+    // Recent activities
+    const [recentOrders] = await query(
+      `SELECT o.*, u.name as customer_name, r.name as restaurant_name
+       FROM orders o
+       JOIN users u ON o.user_id = u.id
+       JOIN restaurants r ON o.restaurant_id = r.id
+       ORDER BY o.created_at DESC
+       LIMIT 10`
+    );
+    
+    // Top restaurants by orders
+    const [topRestaurants] = await query(
+      `SELECT r.name, COUNT(o.id) as order_count, 
+              SUM(o.total_price) as revenue,
+              COALESCE(AVG(rev.rating), 0) as avg_rating
+       FROM restaurants r
+       LEFT JOIN orders o ON r.id = o.restaurant_id
+       LEFT JOIN reviews rev ON r.id = rev.restaurant_id
+       GROUP BY r.id
+       ORDER BY order_count DESC
+       LIMIT 10`
+    );
+    
+    res.json({
+      success: true,
+      data: {
+        user_counts: userCounts,
+        order_stats: orderStats[0] || {},
+        order_status_counts: orderStatusCounts,
+        restaurant_stats: restaurantStats[0] || {},
+        recent_orders: recentOrders,
+        top_restaurants: topRestaurants
+      }
+    });
+  } catch (error) {
+    console.error('GetStatistics Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching statistics' 
+    });
+  }
+};
+
+export const generateReport = async (req, res) => {
+  try {
+    const { report_type, start_date, end_date } = req.body;
+    
+    let queryStr = '';
+    const params = [];
+    
+    switch (report_type) {
+      case 'sales':
+        queryStr = `
+          SELECT 
+            DATE(created_at) as date,
+            COUNT(*) as order_count,
+            SUM(total_price) as total_sales,
+            AVG(total_price) as avg_order_value,
+            COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered_count,
+            COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_count
+          FROM orders
+          WHERE 1=1
+        `;
+        
+        if (start_date && end_date) {
+          queryStr += ' AND DATE(created_at) BETWEEN ? AND ?';
+          params.push(start_date, end_date);
+        }
+        
+        queryStr += ' GROUP BY DATE(created_at) ORDER BY date';
+        break;
+        
+      case 'orders':
+        queryStr = `
+          SELECT 
+            r.name as restaurant_name,
+            COUNT(o.id) as order_count,
+            SUM(o.total_price) as total_revenue,
+            AVG(o.total_price) as avg_order_value,
+            COALESCE(AVG(rev.rating), 0) as avg_rating,
+            COUNT(CASE WHEN o.status = 'delivered' THEN 1 END) as delivered_count
+          FROM restaurants r
+          LEFT JOIN orders o ON r.id = o.restaurant_id
+          LEFT JOIN reviews rev ON r.id = rev.restaurant_id
+          WHERE 1=1
+        `;
+        
+        if (start_date && end_date) {
+          queryStr += ' AND DATE(o.created_at) BETWEEN ? AND ?';
+          params.push(start_date, end_date);
+        }
+        
+        queryStr += ' GROUP BY r.id ORDER BY order_count DESC';
+        break;
+        
+      case 'user_activity':
+        queryStr = `
+          SELECT 
+            u.role,
+            COUNT(DISTINCT u.id) as user_count,
+            COUNT(o.id) as order_count,
+            SUM(o.total_price) as total_spent,
+            AVG(o.total_price) as avg_order_value
+          FROM users u
+          LEFT JOIN orders o ON u.id = o.user_id
+          WHERE 1=1
+        `;
+        
+        if (start_date && end_date) {
+          queryStr += ' AND (DATE(o.created_at) BETWEEN ? AND ? OR o.id IS NULL)';
+          params.push(start_date, end_date);
+        }
+        
+        queryStr += ' GROUP BY u.role';
+        break;
+        
+      default:
+        return res.status(400).json({ 
+          success: false,
+          message: 'Invalid report type' 
+        });
+    }
+    
+    const [data] = await query(queryStr, params);
+    
+    // Save report to database
+    const [result] = await query(
+      `INSERT INTO reports (report_type, data)
+       VALUES (?, ?)`,
+      [report_type, JSON.stringify(data)]
+    );
+    
+    res.json({
+      success: true,
+      data: {
+        report_id: result.insertId,
+        report_type,
+        generated_at: new Date(),
+        data: data
+      }
+    });
+  } catch (error) {
+    console.error('GenerateReport Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error generating report' 
+    });
+  }
+};
+
+export const getReports = async (req, res) => {
+  try {
+    const [reports] = await query(
+      'SELECT * FROM reports ORDER BY created_at DESC'
+    );
+    
+    // Safely parse JSON - handle both objects and arrays
+    const parsedReports = reports.map(report => {
+      try {
+        return {
+          ...report,
+          data: report.data ? report.data : null
+        };
+      } catch (parseError) {
+        console.error(`Failed to parse report ${report.id}:`, parseError);
+        return {
+          ...report,
+          data: null,
+          parse_error: true
+        };
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: parsedReports
+    });
+  } catch (error) {
+    console.error('GetReports Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching reports' 
+    });
+  }
+};
+
+export const getAllDeliveryRequests = async (req, res) => {
+  try {
+    const [requests] = await query(
+      `SELECT dr.*, 
+              o.total_price, o.status as order_status,
+              r.name as restaurant_name,
+              u.name as customer_name,
+              d.name as driver_name
+       FROM delivery_requests dr
+       JOIN orders o ON dr.order_id = o.id
+       JOIN restaurants r ON o.restaurant_id = r.id
+       JOIN users u ON o.user_id = u.id
+       JOIN users d ON dr.driver_id = d.id
+       ORDER BY dr.assigned_at DESC`
+    );
+    
+    res.json({
+      success: true,
+      count: requests.length,
+      data: requests
+    });
+  } catch (error) {
+    console.error('GetAllDeliveryRequests Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching delivery requests' 
+    });
+  }
+};
+
